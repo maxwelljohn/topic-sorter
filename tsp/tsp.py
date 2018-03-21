@@ -44,18 +44,9 @@ class TSPProblem(object):
             xs = xs[tour.nodes]
             ys = ys[tour.nodes]
 
-        # Ensure x & y use similar scale, for better distance visualization.
-        x_spread = max(xs)-min(xs)
-        x_mid = (max(xs)+min(xs))/2
-        y_spread = max(ys)-min(ys)
-        y_mid = (max(ys)+min(ys))/2
-        buff = (max(x_spread, y_spread) * 1.1)/2
-        bounds = matplotlib.transforms.Bbox(np.array([
-            [x_mid-buff, y_mid-buff], [x_mid+buff, y_mid+buff]
-        ]))
         plt.figure(figsize=(FIGSIZE, FIGSIZE))
         plt.plot(
-            xs, ys, 'ko-' if tour else 'ro', markersize=1, clip_box=bounds,
+            xs, ys, 'ko-' if tour else 'ro', markersize=1,
             scalex=True, scaley=True
         )
         plt.show()

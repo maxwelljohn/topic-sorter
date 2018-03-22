@@ -3,7 +3,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
+import optimizers
+
 from collections import defaultdict
+from copy import copy
 
 FIGSIZE = 6
 
@@ -35,7 +38,9 @@ class TSPProblem(object):
             line = infile.readline().rstrip()
             assert line == '' or line == 'EOF'
 
-        self.costs = np.zeros((self.dimension, self.dimension), dtype=np.int)
+        self.costs = -1 * np.ones(
+            (self.dimension, self.dimension), dtype=np.int
+        )
         for i in range(self.dimension):
             for j in range(i+1, self.dimension):
                 self.costs[i, j] = round(
@@ -100,6 +105,7 @@ class TSPSolution(object):
         )
         for i in range(self.dimension):
             self.feasible_edges[i, i+1:] = True
+        self.valid_edges = copy(self.feasible_edges)
 
         if filepath:
             assert filepath.endswith('.tour')
@@ -130,6 +136,20 @@ class TSPSolution(object):
                     self.add_edge(latest_node, first_node)
                     line = infile.readline().rstrip()
                 assert line == '' or line == 'EOF'
+
+        self.ensure_validity()
+
+    def ensure_validity(self):
+        assert np.sum(self.segments * self.valid_edges, axis=(0, 1)) == \
+            np.sum(self.segments, axis=(0, 1))
+
+    def ensure_completion(self):
+        self.ensure_validity()
+        assert np.sum(self.segments, axis=(0, 1)) == self.dimension
+        assert not self.feasible_edges.any()
+        assert all(self.vertex_degrees == 2)
+        cc_name = self.connected_component[0]
+        assert all(self.connected_component == cc_name)
 
     def add_edge(self, node_a, node_b):
         node_a, node_b = sorted([node_a, node_b])
@@ -190,7 +210,10 @@ class TSPSolution(object):
             endpoint1, endpoint2 = sorted(endpoints)
             self.feasible_edges[endpoint1, endpoint2] = True
 
+        self.ensure_validity()
+
     def cost(self):
+        self.ensure_validity()
         return np.sum(self.segments * self.problem.costs, axis=(0, 1))
 
     def show(self):
@@ -207,29 +230,39 @@ def berlin_problem():
     return TSPProblem("berlin52.tsp")
 
 
+def test_greedy(berlin_problem):
+    '''
+    Verify that the greedy solver runs without errors on the Berlin problem.
+    '''
+    soln = optimizers.greedy(berlin_problem)
+    soln.ensure_completion()
+    assert soln.cost() == 9951
+
+
 @pytest.fixture
-def berlin_solution(berlin_problem):
+def berlin_opt_soln(berlin_problem):
     '''
     Optimal tour for the Berlin problem above.
 
     From http://elib.zib.de/pub/mp-testdata/tsp/tsplib/tsp/index.html
     '''
-    sol = TSPSolution(berlin_problem, "berlin52.opt.tour")
-    assert np.sum(sol.segments, axis=(0, 1)) == sol.dimension
-    return sol
+    soln = TSPSolution(berlin_problem, "berlin52.opt.tour")
+    soln.ensure_completion()
+    return soln
 
 
-def test_cost_calculation(berlin_solution):
+def test_cost_calculation(berlin_opt_soln):
     '''
-    Verify that the cost for the Berlin tour is calculated properly.
+    Verify that the cost for the optimal Berlin tour is calculated properly.
 
     7542 comes from http://elib.zib.de/pub/mp-testdata/tsp/tsplib/stsp-sol.html
     '''
-    assert berlin_solution.cost() == 7542
+    assert berlin_opt_soln.cost() == 7542
 
 
 if __name__ == '__main__':
     import sys
     problem = TSPProblem(sys.argv[1])
-    solution = TSPSolution(problem, sys.argv[2])
-    solution.show()
+    soln = optimizers.greedy(problem)
+    print(soln.cost())
+    soln.show()

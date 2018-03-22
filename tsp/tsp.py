@@ -59,46 +59,47 @@ class TSPProblem(object):
 
 
 class TSPSolution(object):
-    def __init__(self, problem, filepath):
+    def __init__(self, problem, filepath=None):
         self.problem = problem
         self.segments = np.zeros(
             (self.problem.dimension, self.problem.dimension)
         )
 
-        assert filepath.endswith('.tour')
-        with open(filepath, 'r') as infile:
-            self.info = defaultdict(list)
-            line = infile.readline()
-            while not line.startswith('TOUR_SECTION'):
-                parts = line.split(':')
-                self.info[parts[0].strip()].append(':'.join(parts[1:]).strip())
+        if filepath:
+            assert filepath.endswith('.tour')
+            with open(filepath, 'r') as infile:
+                self.info = defaultdict(list)
                 line = infile.readline()
-            assert self.info['TYPE'] == ['TOUR']
-            assert len(self.info['DIMENSION']) == 1
-            self.dimension = int(self.info['DIMENSION'][0])
-            assert self.dimension == self.problem.dimension
+                while not line.startswith('TOUR_SECTION'):
+                    parts = line.split(':')
+                    self.info[parts[0].strip()].append(':'.join(parts[1:]).strip())
+                    line = infile.readline()
+                assert self.info['TYPE'] == ['TOUR']
+                assert len(self.info['DIMENSION']) == 1
+                self.dimension = int(self.info['DIMENSION'][0])
+                assert self.dimension == self.problem.dimension
 
-            self.nodes = []
-            for i in range(self.dimension):
+                self.nodes = []
+                for i in range(self.dimension):
+                    line = infile.readline().rstrip()
+                    # .tour files are 1-indexed, but we 0-index nodes.
+                    this_node = int(line)-1
+                    if self.nodes:
+                        if self.nodes[-1] < this_node:
+                            self.segments[self.nodes[-1], this_node] = 1
+                        else:
+                            self.segments[this_node, self.nodes[-1]] = 1
+                    self.nodes.append(this_node)
                 line = infile.readline().rstrip()
-                # .tour files are 1-indexed, but we 0-index nodes.
-                this_node = int(line)-1
-                if self.nodes:
+                if line == '-1':
+                    this_node = self.nodes[0]
                     if self.nodes[-1] < this_node:
                         self.segments[self.nodes[-1], this_node] = 1
                     else:
                         self.segments[this_node, self.nodes[-1]] = 1
-                self.nodes.append(this_node)
-            line = infile.readline().rstrip()
-            if line == '-1':
-                this_node = self.nodes[0]
-                if self.nodes[-1] < this_node:
-                    self.segments[self.nodes[-1], this_node] = 1
-                else:
-                    self.segments[this_node, self.nodes[-1]] = 1
-                self.nodes.append(this_node)
-                line = infile.readline().rstrip()
-            assert line == '' or line == 'EOF'
+                    self.nodes.append(this_node)
+                    line = infile.readline().rstrip()
+                assert line == '' or line == 'EOF'
 
     def cost(self):
         return np.sum(self.segments * self.problem.costs, axis=(0, 1))

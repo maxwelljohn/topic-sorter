@@ -43,27 +43,63 @@ class TSPProblem(object):
                 )
 
     def show(self, tour=None):
-        xs = np.array([node[0] for node in self.nodes])
-        ys = np.array([node[1] for node in self.nodes])
-
-        if tour:
-            xs = xs[tour.nodes]
-            ys = ys[tour.nodes]
-
+        point_xs = np.array([node[0] for node in self.nodes])
+        point_ys = np.array([node[1] for node in self.nodes])
         plt.figure(figsize=(FIGSIZE, FIGSIZE))
         plt.plot(
-            xs, ys, 'ko-' if tour else 'ro', markersize=1,
+            point_xs, point_ys, 'ro', markersize=3,
             scalex=True, scaley=True
         )
+
+        if tour:
+            endpoints = np.arange(tour.dimension)[tour.vertex_degrees == 1]
+            assert len(endpoints) % 2 == 0
+            if len(endpoints) == 0:  # Visualizing a complete tour
+                endpoints = [0]  # Arbitrarily start at 0th node
+            for endpoint in endpoints:  # Incomplete tours get drawn twice
+                itinerary = []
+                unvisited_neighbors = [endpoint]
+                while unvisited_neighbors:
+                    here = unvisited_neighbors[0]
+                    itinerary.append(here)
+                    neighbors = np.arange(tour.dimension)[
+                        (tour.segments[here, :] | tour.segments[:, here]) == 1
+                    ]
+                    unvisited_neighbors = [
+                        n for n in neighbors if n not in itinerary
+                    ]
+                    assert len(unvisited_neighbors) <= 1 or \
+                        (len(endpoints) == 1 and len(itinerary) == 1)
+                if len(endpoints) == 1:  # Close loop if it was a complete tour
+                    itinerary.append(itinerary[0])
+                itinerary_xs = point_xs[itinerary]
+                itinerary_ys = point_ys[itinerary]
+                plt.plot(
+                    itinerary_xs, itinerary_ys, 'kx-', markersize=1
+                )
+
         plt.show()
 
 
 class TSPSolution(object):
     def __init__(self, problem, filepath=None):
         self.problem = problem
+        self.dimension = self.problem.dimension
         self.segments = np.zeros(
-            (self.problem.dimension, self.problem.dimension)
+            (self.dimension, self.dimension),
+            dtype=np.int
         )
+
+        self.vertex_degrees = np.zeros(self.dimension, dtype=np.int)
+        # Track which connected component each vertex belongs to.
+        # Components are named after an arbitrary vertex in the component.
+        self.connected_component = -1 * np.ones(self.dimension, dtype=np.int)
+        self.feasible_edges = np.zeros(
+            (self.dimension, self.dimension),
+            dtype=np.bool
+        )
+        for i in range(self.dimension):
+            self.feasible_edges[i, i+1:] = True
 
         if filepath:
             assert filepath.endswith('.tour')
@@ -72,34 +108,74 @@ class TSPSolution(object):
                 line = infile.readline()
                 while not line.startswith('TOUR_SECTION'):
                     parts = line.split(':')
-                    self.info[parts[0].strip()].append(':'.join(parts[1:]).strip())
+                    self.info[parts[0].strip()].append(
+                        ':'.join(parts[1:]).strip()
+                    )
                     line = infile.readline()
                 assert self.info['TYPE'] == ['TOUR']
                 assert len(self.info['DIMENSION']) == 1
-                self.dimension = int(self.info['DIMENSION'][0])
-                assert self.dimension == self.problem.dimension
+                assert int(self.info['DIMENSION'][0]) == self.dimension
 
-                self.nodes = []
-                for i in range(self.dimension):
+                line = infile.readline().rstrip()
+                # .tour files are 1-indexed, but we 0-index nodes.
+                first_node = int(line)-1
+                latest_node = first_node
+                for i in range(self.dimension-1):
                     line = infile.readline().rstrip()
-                    # .tour files are 1-indexed, but we 0-index nodes.
                     this_node = int(line)-1
-                    if self.nodes:
-                        if self.nodes[-1] < this_node:
-                            self.segments[self.nodes[-1], this_node] = 1
-                        else:
-                            self.segments[this_node, self.nodes[-1]] = 1
-                    self.nodes.append(this_node)
+                    self.add_edge(latest_node, this_node)
+                    latest_node = this_node
                 line = infile.readline().rstrip()
                 if line == '-1':
-                    this_node = self.nodes[0]
-                    if self.nodes[-1] < this_node:
-                        self.segments[self.nodes[-1], this_node] = 1
-                    else:
-                        self.segments[this_node, self.nodes[-1]] = 1
-                    self.nodes.append(this_node)
+                    self.add_edge(latest_node, first_node)
                     line = infile.readline().rstrip()
                 assert line == '' or line == 'EOF'
+
+    def add_edge(self, node_a, node_b):
+        if node_a < node_b:
+            assert self.feasible_edges[node_a, node_b]
+            assert self.segments[node_a, node_b] == 0
+            self.segments[node_a, node_b] = 1
+            self.feasible_edges[node_a, node_b] = False
+        else:
+            assert self.feasible_edges[node_b, node_a]
+            assert self.segments[node_b, node_a] == 0
+            self.segments[node_b, node_a] = 1
+            self.feasible_edges[node_b, node_a] = False
+
+        for node in [node_a, node_b]:
+            assert self.vertex_degrees[node] < 2
+            self.vertex_degrees[node] += 1
+            if self.vertex_degrees[node] == 2:
+                # No more edges allowed for this node!
+                self.feasible_edges[node, :] = False
+                self.feasible_edges[:, node] = False
+
+        if self.connected_component[node_a] == -1 and \
+                self.connected_component[node_b] == -1:
+            self.connected_component[[node_a, node_b]] = min(node_a, node_b)
+        elif self.connected_component[node_a] == -1:
+            self.connected_component[node_a] = self.connected_component[node_b]
+        elif self.connected_component[node_b] == -1:
+            self.connected_component[node_b] = self.connected_component[node_a]
+        elif not self.feasible_edges.any():
+            pass  # The tour is complete!
+        else:
+            assert self.connected_component[node_a] != \
+                self.connected_component[node_b]
+            swallower, swallowed = [
+                self.connected_component[node_a],
+                self.connected_component[node_b]
+            ]
+            self.connected_component[
+                [self.connected_component == swallowed]
+            ] = swallower
+            mask = self.connected_component == swallower
+            for node in range(self.dimension):
+                # If a node is part of the new, combined component...
+                if mask[node]:
+                    # Then edges to other nodes in the component are infeasible
+                    self.feasible_edges[node, mask] = False
 
     def cost(self):
         return np.sum(self.segments * self.problem.costs, axis=(0, 1))

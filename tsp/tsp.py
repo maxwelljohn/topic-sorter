@@ -132,16 +132,12 @@ class TSPSolution(object):
                 assert line == '' or line == 'EOF'
 
     def add_edge(self, node_a, node_b):
-        if node_a < node_b:
-            assert self.feasible_edges[node_a, node_b]
-            assert self.segments[node_a, node_b] == 0
-            self.segments[node_a, node_b] = 1
-            self.feasible_edges[node_a, node_b] = False
-        else:
-            assert self.feasible_edges[node_b, node_a]
-            assert self.segments[node_b, node_a] == 0
-            self.segments[node_b, node_a] = 1
-            self.feasible_edges[node_b, node_a] = False
+        node_a, node_b = sorted([node_a, node_b])
+
+        assert self.feasible_edges[node_a, node_b]
+        assert self.segments[node_a, node_b] == 0
+        self.feasible_edges[node_a, node_b] = False
+        self.segments[node_a, node_b] = 1
 
         for node in [node_a, node_b]:
             assert self.vertex_degrees[node] < 2
@@ -151,16 +147,14 @@ class TSPSolution(object):
                 self.feasible_edges[node, :] = False
                 self.feasible_edges[:, node] = False
 
+        if not self.feasible_edges.any():
+            return  # The tour is complete.
+
         if self.connected_component[node_a] == -1 and \
                 self.connected_component[node_b] == -1:
-            self.connected_component[[node_a, node_b]] = min(node_a, node_b)
-        elif self.connected_component[node_a] == -1:
-            self.connected_component[node_a] = self.connected_component[node_b]
-        elif self.connected_component[node_b] == -1:
-            self.connected_component[node_b] = self.connected_component[node_a]
-        elif not self.feasible_edges.any():
-            pass  # The tour is complete!
-        else:
+            self.connected_component[[node_a, node_b]] = node_a
+        elif self.connected_component[node_a] != -1 and \
+                self.connected_component[node_b] != -1:
             assert self.connected_component[node_a] != \
                 self.connected_component[node_b]
             swallower, swallowed = [
@@ -171,11 +165,30 @@ class TSPSolution(object):
                 [self.connected_component == swallowed]
             ] = swallower
             mask = self.connected_component == swallower
-            for node in range(self.dimension):
-                # If a node is part of the new, combined component...
-                if mask[node]:
-                    # Then edges to other nodes in the component are infeasible
-                    self.feasible_edges[node, mask] = False
+            # For every node in the new, combined component...
+            for node in np.arange(self.dimension)[mask]:
+                # Edges to other nodes in the component are now infeasible.
+                self.feasible_edges[node, mask] = False
+        else:
+            if self.connected_component[node_a] == -1:
+                addition = node_a
+                swallower = self.connected_component[node_b]
+            else:
+                assert self.connected_component[node_b] == -1
+                addition = node_b
+                swallower = self.connected_component[node_a]
+            assert swallower != -1
+            self.connected_component[addition] = swallower
+            mask = self.connected_component == swallower
+            self.feasible_edges[addition, mask] = False
+            self.feasible_edges[mask, addition] = False
+
+        # If the tour is almost complete, make the loop-closing edge feasible.
+        if not self.feasible_edges.any():
+            endpoints = np.arange(self.dimension)[self.vertex_degrees == 1]
+            assert len(endpoints) == 2
+            endpoint1, endpoint2 = sorted(endpoints)
+            self.feasible_edges[endpoint1, endpoint2] = True
 
     def cost(self):
         return np.sum(self.segments * self.problem.costs, axis=(0, 1))

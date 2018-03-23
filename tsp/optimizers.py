@@ -3,7 +3,7 @@ import tsp
 
 
 def greedy(problem):
-    soln = tsp.TSPSolution(problem)
+    soln = problem.solution_type(problem)
     while soln.feasible_edges.any():
         target_value = np.min(problem.costs[soln.feasible_edges])
         assert target_value != -1

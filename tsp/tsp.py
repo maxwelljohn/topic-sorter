@@ -11,7 +11,15 @@ from copy import copy
 FIGSIZE = 6
 
 
-class TSPProblem(object):
+class OrderProblem:
+    def __init__(self, dimension):
+        self.dimension = dimension
+        self.costs = -1 * np.ones(
+            (self.dimension, self.dimension), dtype=np.int
+        )
+
+
+class TSPProblem(OrderProblem):
     def __init__(self, filepath):
         assert filepath.endswith('.tsp')
         with open(filepath, 'r') as infile:
@@ -23,8 +31,9 @@ class TSPProblem(object):
                 line = infile.readline()
             assert self.info['TYPE'] == ['TSP']
             assert self.info['EDGE_WEIGHT_TYPE'] == ['EUC_2D']
+
             assert len(self.info['DIMENSION']) == 1
-            self.dimension = int(self.info['DIMENSION'][0])
+            super().__init__(int(self.info['DIMENSION'][0]))
 
             self.point_set = np.zeros((self.dimension, 2))
             for i in range(1, self.dimension+1):
@@ -40,9 +49,6 @@ class TSPProblem(object):
             line = infile.readline().rstrip()
             assert line == '' or line == 'EOF'
 
-        self.costs = -1 * np.ones(
-            (self.dimension, self.dimension), dtype=np.int
-        )
         for i in range(self.dimension):
             for j in range(i+1, self.dimension):
                 self.costs[i, j] = round(
@@ -88,8 +94,8 @@ class TSPProblem(object):
         plt.show()
 
 
-class TSPSolution(object):
-    def __init__(self, problem, filepath=None):
+class OrderSolution:
+    def __init__(self, problem):
         self.problem = problem
         self.dimension = self.problem.dimension
         self.edges_added = np.zeros(
@@ -110,37 +116,8 @@ class TSPSolution(object):
         # Used for error checking.
         self.valid_edges = copy(self.feasible_edges)
 
-        if filepath:
-            assert filepath.endswith('.tour')
-            with open(filepath, 'r') as infile:
-                self.info = defaultdict(list)
-                line = infile.readline()
-                while not line.startswith('TOUR_SECTION'):
-                    parts = line.split(':')
-                    self.info[parts[0].strip()].append(
-                        ':'.join(parts[1:]).strip()
-                    )
-                    line = infile.readline()
-                assert self.info['TYPE'] == ['TOUR']
-                assert len(self.info['DIMENSION']) == 1
-                assert int(self.info['DIMENSION'][0]) == self.dimension
-
-                line = infile.readline().rstrip()
-                # .tour files are 1-indexed, but we 0-index nodes.
-                first_node = int(line) - 1
-                latest_node = first_node
-                for i in range(self.dimension - 1):
-                    line = infile.readline().rstrip()
-                    this_node = int(line) - 1
-                    self.add_edge(latest_node, this_node)
-                    latest_node = this_node
-                line = infile.readline().rstrip()
-                if line == '-1':
-                    self.add_edge(latest_node, first_node)
-                    line = infile.readline().rstrip()
-                assert line == '' or line == 'EOF'
-
         self.ensure_validity()
+        self.complete = False
 
     def ensure_validity(self):
         assert np.sum(self.edges_added * self.valid_edges, axis=(0, 1)) == \
@@ -148,11 +125,10 @@ class TSPSolution(object):
 
     def ensure_completion(self):
         self.ensure_validity()
-        assert np.sum(self.edges_added, axis=(0, 1)) == self.dimension
         assert not self.feasible_edges.any()
-        assert all(self.node_degrees == 2)
         cc_name = self.connected_component[0]
         assert all(self.connected_component == cc_name)
+        assert self.complete
 
     def add_edge(self, node_a, node_b):
         node_a, node_b = sorted([node_a, node_b])
@@ -170,8 +146,13 @@ class TSPSolution(object):
                 self.feasible_edges[node, :] = False
                 self.feasible_edges[:, node] = False
 
+        # This check needs to happen before updating edge feasibility.
+        # The TSPSolution class interprets
+        # not self.complete and not self.feasible_edges.any()
+        # to mean that we need just one final edge for a cycle.
         if not self.feasible_edges.any():
-            return  # The tour is complete.
+            self.complete = True
+            return
 
         if self.connected_component[node_a] == -1 and \
                 self.connected_component[node_b] == -1:
@@ -206,8 +187,55 @@ class TSPSolution(object):
             self.feasible_edges[addition, mask] = False
             self.feasible_edges[mask, addition] = False
 
+        self.ensure_validity()
+
+
+class TSPSolution(OrderSolution):
+    def __init__(self, problem, filepath=None):
+        super().__init__(problem)
+
+        if filepath:
+            assert filepath.endswith('.tour')
+            with open(filepath, 'r') as infile:
+                self.info = defaultdict(list)
+                line = infile.readline()
+                while not line.startswith('TOUR_SECTION'):
+                    parts = line.split(':')
+                    self.info[parts[0].strip()].append(
+                        ':'.join(parts[1:]).strip()
+                    )
+                    line = infile.readline()
+                assert self.info['TYPE'] == ['TOUR']
+                assert len(self.info['DIMENSION']) == 1
+                assert int(self.info['DIMENSION'][0]) == self.dimension
+
+                line = infile.readline().rstrip()
+                # .tour files are 1-indexed, but we 0-index nodes.
+                first_node = int(line) - 1
+                latest_node = first_node
+                for i in range(self.dimension - 1):
+                    line = infile.readline().rstrip()
+                    this_node = int(line) - 1
+                    self.add_edge(latest_node, this_node)
+                    latest_node = this_node
+                line = infile.readline().rstrip()
+                if line == '-1':
+                    self.add_edge(latest_node, first_node)
+                    line = infile.readline().rstrip()
+                assert line == '' or line == 'EOF'
+
+        self.ensure_validity()
+
+    def ensure_completion(self):
+        super().ensure_completion()
+        assert np.sum(self.edges_added, axis=(0, 1)) == self.dimension
+        assert all(self.node_degrees == 2)
+
+    def add_edge(self, node_a, node_b):
+        super().add_edge(node_a, node_b)
+
         # If the tour is almost complete, make the loop-closing edge feasible.
-        if not self.feasible_edges.any():
+        if not self.complete and not self.feasible_edges.any():
             endpoints = np.arange(self.dimension)[self.node_degrees == 1]
             assert len(endpoints) == 2
             endpoint1, endpoint2 = sorted(endpoints)
@@ -221,6 +249,9 @@ class TSPSolution(object):
 
     def show(self):
         self.problem.show(self)
+
+
+TSPProblem.solution_type = TSPSolution
 
 
 @pytest.fixture

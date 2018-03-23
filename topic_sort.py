@@ -13,40 +13,40 @@ MAX_NGRAM_N = 3
 
 
 def main(passage_file):
-    passages = passage_file.read().split(PASSAGE_SEPARATOR)
-    wnl = nltk.WordNetLemmatizer()
-    passage_ngrams = {}
-    ngram_document_frequency = nltk.FreqDist()
+        passages = passage_file.read().split(PASSAGE_SEPARATOR)
+        wnl = nltk.WordNetLemmatizer()
+        passage_ngrams = {}
+        ngram_document_frequency = nltk.FreqDist()
 
-    for passage in passages:
-        lemmas = [wnl.lemmatize(t) for t in
-                  nltk.word_tokenize(passage.lower())]
-        lemmas = [l for l in lemmas if l not in STOPWORDS and
-                  re.match(WORD_RE, l)]
+        for passage in passages:
+            lemmas = [wnl.lemmatize(t) for t in
+                      nltk.word_tokenize(passage.lower())]
+            lemmas = [l for l in lemmas if l not in STOPWORDS and
+                      re.match(WORD_RE, l)]
 
-        ngrams = []
-        for n in range(1, MAX_NGRAM_N+1):
-            ngrams.extend(nltk.ngrams(lemmas, n))
-        passage_ngrams[passage] = nltk.FreqDist(ngrams)
+            ngrams = []
+            for n in range(1, MAX_NGRAM_N+1):
+                ngrams.extend(nltk.ngrams(lemmas, n))
+            passage_ngrams[passage] = nltk.FreqDist(ngrams)
 
-        unique_ngrams = set(ngrams)
-        for ngram in unique_ngrams:
-            ngram_document_frequency[ngram] += 1
+            unique_ngrams = set(ngrams)
+            for ngram in unique_ngrams:
+                ngram_document_frequency[ngram] += 1
 
-    similarity = {}
-    for index1, passage1 in enumerate(passages):
-        for passage2 in passages[index1+1:]:
-            canonical_order = tuple(sorted([passage1, passage2]))
-            ngrams1 = passage_ngrams[passage1]
-            ngrams2 = passage_ngrams[passage2]
-            similarity_score = 0
-            for g in ngrams1:
-                if ngrams2[g] > 0:
-                    # TF-IDF weighting
-                    similarity_score += (1 + np.log(ngrams1[g])) * \
-                        (1 + np.log(ngrams2[g])) * \
-                        (np.log(len(passages)/ngram_document_frequency[g]))
-            similarity[canonical_order] = similarity_score
+        similarity = {}
+        for index1, passage1 in enumerate(passages):
+            for passage2 in passages[index1+1:]:
+                canonical_order = tuple(sorted([passage1, passage2]))
+                ngrams1 = passage_ngrams[passage1]
+                ngrams2 = passage_ngrams[passage2]
+                similarity_score = 0
+                for g in ngrams1:
+                    if ngrams2[g] > 0:
+                        # TF-IDF weighting
+                        similarity_score += (1 + np.log(ngrams1[g])) * \
+                            (1 + np.log(ngrams2[g])) * \
+                            (np.log(len(passages)/ngram_document_frequency[g]))
+                similarity[canonical_order] = similarity_score
 
     pairs_w_similarity = list(similarity.items())
     pairs_w_similarity.sort(key=lambda ps: ps[1])

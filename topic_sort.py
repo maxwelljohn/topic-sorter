@@ -16,7 +16,7 @@ WORD_RE = re.compile('^\w+$')
 MAX_NGRAM_N = 3
 
 
-class TopicSortProblem(order_problem.OrderProblem):
+class TopicSortProblem(order_problem.OrderingProblem):
     def __init__(self, passage_file):
         self.passages = passage_file.read().strip().split(PASSAGE_SEPARATOR)
         super().__init__(len(self.passages))
@@ -57,7 +57,7 @@ class TopicSortProblem(order_problem.OrderProblem):
                 self.costs[index1, index2] = -1000 * similarity_score
 
 
-class TopicSortSolution(order_problem.OrderSolution):
+class TopicSortSolution(order_problem.OrderingSolution):
     def __init__(self, problem):
         super().__init__(problem)
 

@@ -11,7 +11,7 @@ from collections import defaultdict
 FIGSIZE = 6
 
 
-class TSPProblem(order_problem.OrderProblem):
+class TSPProblem(order_problem.OrderingProblem):
     def __init__(self, filepath):
         assert filepath.endswith('.tsp')
         with open(filepath, 'r') as infile:
@@ -67,7 +67,7 @@ class TSPProblem(order_problem.OrderProblem):
         plt.show()
 
 
-class TSPSolution(order_problem.OrderSolution):
+class TSPSolution(order_problem.OrderingSolution):
     def __init__(self, problem, filepath=None):
         super().__init__(problem)
 

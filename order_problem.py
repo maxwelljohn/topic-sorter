@@ -3,7 +3,7 @@ import numpy as np
 from copy import copy
 
 
-class OrderProblem:
+class OrderingProblem:
     def __init__(self, dimension):
         self.dimension = dimension
         self.costs = -1 * np.ones(
@@ -11,7 +11,7 @@ class OrderProblem:
         )
 
 
-class OrderSolution:
+class OrderingSolution:
     def __init__(self, problem):
         self.problem = problem
         self.dimension = self.problem.dimension

@@ -26,7 +26,7 @@ class TSPProblem(object):
             assert len(self.info['DIMENSION']) == 1
             self.dimension = int(self.info['DIMENSION'][0])
 
-            self.nodes = np.zeros((self.dimension, 2))
+            self.point_set = np.zeros((self.dimension, 2))
             for i in range(1, self.dimension+1):
                 line = infile.readline().rstrip()
                 # Unfortunately the .tsp files don't distinguish between
@@ -34,7 +34,9 @@ class TSPProblem(object):
                 # So the TSP may be flipped in some cases.
                 node_num, latitude, longitude = line.split(' ')
                 assert int(node_num) == i
-                self.nodes[i-1] = np.array([float(longitude), float(latitude)])
+                self.point_set[i-1] = np.array(
+                    [float(longitude), float(latitude)]
+                )
             line = infile.readline().rstrip()
             assert line == '' or line == 'EOF'
 
@@ -44,12 +46,12 @@ class TSPProblem(object):
         for i in range(self.dimension):
             for j in range(i+1, self.dimension):
                 self.costs[i, j] = round(
-                    np.linalg.norm(self.nodes[i]-self.nodes[j])
+                    np.linalg.norm(self.point_set[i]-self.point_set[j])
                 )
 
     def show(self, tour=None):
-        point_xs = np.array([node[0] for node in self.nodes])
-        point_ys = np.array([node[1] for node in self.nodes])
+        point_xs = self.point_set[:, 0]
+        point_ys = self.point_set[:, 1]
         plt.figure(figsize=(FIGSIZE, FIGSIZE))
         plt.plot(
             point_xs, point_ys, 'ro', markersize=3,
@@ -57,7 +59,7 @@ class TSPProblem(object):
         )
 
         if tour:
-            endpoints = np.arange(tour.dimension)[tour.vertex_degrees == 1]
+            endpoints = np.arange(tour.dimension)[tour.node_degrees == 1]
             assert len(endpoints) % 2 == 0
             if len(endpoints) == 0:  # Visualizing a complete tour
                 endpoints = [0]  # Arbitrarily start at 0th node
@@ -68,7 +70,7 @@ class TSPProblem(object):
                     here = unvisited_neighbors[0]
                     itinerary.append(here)
                     neighbors = np.arange(tour.dimension)[
-                        (tour.segments[here, :] | tour.segments[:, here]) == 1
+                        (tour.edges_added[here, :] | tour.edges_added[:, here])
                     ]
                     unvisited_neighbors = [
                         n for n in neighbors if n not in itinerary
@@ -90,14 +92,14 @@ class TSPSolution(object):
     def __init__(self, problem, filepath=None):
         self.problem = problem
         self.dimension = self.problem.dimension
-        self.segments = np.zeros(
+        self.edges_added = np.zeros(
             (self.dimension, self.dimension),
-            dtype=np.int
+            dtype=np.bool
         )
 
-        self.vertex_degrees = np.zeros(self.dimension, dtype=np.int)
-        # Track which connected component each vertex belongs to.
-        # Components are named after an arbitrary vertex in the component.
+        self.node_degrees = np.zeros(self.dimension, dtype=np.int)
+        # Track which connected component each node belongs to.
+        # Components are named after an arbitrary node in the component.
         self.connected_component = -1 * np.ones(self.dimension, dtype=np.int)
         self.feasible_edges = np.zeros(
             (self.dimension, self.dimension),
@@ -105,6 +107,7 @@ class TSPSolution(object):
         )
         for i in range(self.dimension):
             self.feasible_edges[i, i+1:] = True
+        # Used for error checking.
         self.valid_edges = copy(self.feasible_edges)
 
         if filepath:
@@ -124,11 +127,11 @@ class TSPSolution(object):
 
                 line = infile.readline().rstrip()
                 # .tour files are 1-indexed, but we 0-index nodes.
-                first_node = int(line)-1
+                first_node = int(line) - 1
                 latest_node = first_node
-                for i in range(self.dimension-1):
+                for i in range(self.dimension - 1):
                     line = infile.readline().rstrip()
-                    this_node = int(line)-1
+                    this_node = int(line) - 1
                     self.add_edge(latest_node, this_node)
                     latest_node = this_node
                 line = infile.readline().rstrip()
@@ -140,14 +143,14 @@ class TSPSolution(object):
         self.ensure_validity()
 
     def ensure_validity(self):
-        assert np.sum(self.segments * self.valid_edges, axis=(0, 1)) == \
-            np.sum(self.segments, axis=(0, 1))
+        assert np.sum(self.edges_added * self.valid_edges, axis=(0, 1)) == \
+            np.sum(self.edges_added, axis=(0, 1))
 
     def ensure_completion(self):
         self.ensure_validity()
-        assert np.sum(self.segments, axis=(0, 1)) == self.dimension
+        assert np.sum(self.edges_added, axis=(0, 1)) == self.dimension
         assert not self.feasible_edges.any()
-        assert all(self.vertex_degrees == 2)
+        assert all(self.node_degrees == 2)
         cc_name = self.connected_component[0]
         assert all(self.connected_component == cc_name)
 
@@ -155,14 +158,14 @@ class TSPSolution(object):
         node_a, node_b = sorted([node_a, node_b])
 
         assert self.feasible_edges[node_a, node_b]
-        assert self.segments[node_a, node_b] == 0
+        assert not self.edges_added[node_a, node_b]
         self.feasible_edges[node_a, node_b] = False
-        self.segments[node_a, node_b] = 1
+        self.edges_added[node_a, node_b] = True
 
         for node in [node_a, node_b]:
-            assert self.vertex_degrees[node] < 2
-            self.vertex_degrees[node] += 1
-            if self.vertex_degrees[node] == 2:
+            assert self.node_degrees[node] < 2
+            self.node_degrees[node] += 1
+            if self.node_degrees[node] == 2:
                 # No more edges allowed for this node!
                 self.feasible_edges[node, :] = False
                 self.feasible_edges[:, node] = False
@@ -205,7 +208,7 @@ class TSPSolution(object):
 
         # If the tour is almost complete, make the loop-closing edge feasible.
         if not self.feasible_edges.any():
-            endpoints = np.arange(self.dimension)[self.vertex_degrees == 1]
+            endpoints = np.arange(self.dimension)[self.node_degrees == 1]
             assert len(endpoints) == 2
             endpoint1, endpoint2 = sorted(endpoints)
             self.feasible_edges[endpoint1, endpoint2] = True
@@ -214,7 +217,7 @@ class TSPSolution(object):
 
     def cost(self):
         self.ensure_validity()
-        return np.sum(self.segments * self.problem.costs, axis=(0, 1))
+        return np.sum(self.edges_added * self.problem.costs, axis=(0, 1))
 
     def show(self):
         self.problem.show(self)
@@ -263,6 +266,11 @@ def test_cost_calculation(berlin_opt_soln):
 if __name__ == '__main__':
     import sys
     problem = TSPProblem(sys.argv[1])
-    soln = optimizers.greedy(problem)
-    print(soln.cost())
-    soln.show()
+    if len(sys.argv) <= 2:
+        soln = optimizers.greedy(problem)
+        print(soln.cost())
+        soln.show()
+    else:
+        soln = TSPSolution(problem, sys.argv[2])
+        print(soln.cost())
+        soln.show()

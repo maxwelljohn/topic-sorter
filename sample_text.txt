@@ -1,0 +1,7 @@
+apples bananas
+
+pears plums
+
+bananas oranges
+
+oranges pears plums

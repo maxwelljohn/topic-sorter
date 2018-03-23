@@ -57,26 +57,7 @@ class TSPProblem(order_problem.OrderProblem):
         )
 
         if tour:
-            endpoints = np.arange(tour.dimension)[tour.node_degrees == 1]
-            assert len(endpoints) % 2 == 0
-            if len(endpoints) == 0:  # Visualizing a complete tour
-                endpoints = [0]  # Arbitrarily start at 0th node
-            for endpoint in endpoints:  # Incomplete tours get drawn twice
-                itinerary = []
-                unvisited_neighbors = [endpoint]
-                while unvisited_neighbors:
-                    here = unvisited_neighbors[0]
-                    itinerary.append(here)
-                    neighbors = np.arange(tour.dimension)[
-                        (tour.edges_added[here, :] | tour.edges_added[:, here])
-                    ]
-                    unvisited_neighbors = [
-                        n for n in neighbors if n not in itinerary
-                    ]
-                    assert len(unvisited_neighbors) <= 1 or \
-                        (len(endpoints) == 1 and len(itinerary) == 1)
-                if len(endpoints) == 1:  # Close loop if it was a complete tour
-                    itinerary.append(itinerary[0])
+            for itinerary in tour.components():
                 itinerary_xs = point_xs[itinerary]
                 itinerary_ys = point_ys[itinerary]
                 plt.plot(
@@ -132,7 +113,7 @@ class TSPSolution(order_problem.OrderSolution):
 
         # If the tour is almost complete, make the loop-closing edge feasible.
         if not self.complete and not self.feasible_edges.any():
-            endpoints = np.arange(self.dimension)[self.node_degrees == 1]
+            endpoints = self.endpoints()
             assert len(endpoints) == 2
             endpoint1, endpoint2 = sorted(endpoints)
             self.feasible_edges[endpoint1, endpoint2] = True
@@ -162,7 +143,7 @@ def berlin_problem():
 
 def test_greedy(berlin_problem):
     '''
-    Verify that the greedy solver runs without errors on the Berlin problem.
+    Verify the greedy solver runs without errors on the Berlin problem.
     '''
     soln = optimizers.greedy(berlin_problem)
     soln.ensure_completion()
@@ -183,7 +164,7 @@ def berlin_opt_soln(berlin_problem):
 
 def test_cost_calculation(berlin_opt_soln):
     '''
-    Verify that the cost for the optimal Berlin tour is calculated properly.
+    Verify the cost for the optimal Berlin tour is calculated properly.
 
     7542 comes from http://elib.zib.de/pub/mp-testdata/tsp/tsplib/stsp-sol.html
     '''

@@ -105,3 +105,37 @@ class OrderSolution:
             self.feasible_edges[mask, addition] = False
 
         self.ensure_validity()
+
+    def endpoints(self):
+        return np.arange(self.dimension)[self.node_degrees == 1]
+
+    def components(self):
+        endpoints = self.endpoints()
+        assert len(endpoints) % 2 == 0
+        if len(endpoints) == 0:  # Either a complete loop, or no components
+            endpoints = [0]  # Arbitrarily start at 0th node
+        explored = set()
+        result = []
+        for endpoint in sorted(endpoints):
+            if self.connected_component[endpoint] not in explored:
+                explored.add(self.connected_component[endpoint])
+                itinerary = []
+                unvisited_neighbors = [endpoint]
+                while unvisited_neighbors:
+                    here = unvisited_neighbors[0]
+                    itinerary.append(here)
+                    neighbors = np.arange(self.dimension)[
+                        (self.edges_added[here, :] | self.edges_added[:, here])
+                    ]
+                    unvisited_neighbors = [
+                        n for n in neighbors if n not in itinerary
+                    ]
+                    # If a solution is valid, the only way for there to be two
+                    # unvisited neighbors is if we just started on a loop.
+                    assert len(unvisited_neighbors) <= 1 or \
+                        (len(endpoints) == 1 and len(itinerary) == 1)
+                # Close loop if it was a complete tour.
+                if len(endpoints) == 1 and len(explored) > 1:
+                    itinerary.append(itinerary[0])
+                result.append(itinerary)
+        return result

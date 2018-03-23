@@ -135,7 +135,7 @@ class OrderingSolution:
                     assert len(unvisited_neighbors) <= 1 or \
                         (len(endpoints) == 1 and len(itinerary) == 1)
                 # Close loop if it was a complete tour.
-                if len(endpoints) == 1 and len(explored) > 1:
+                if len(endpoints) == 1 and len(itinerary) > 1:
                     itinerary.append(itinerary[0])
                 result.append(itinerary)
         return result

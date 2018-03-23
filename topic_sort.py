@@ -118,7 +118,7 @@ pears plums
 def main(passage_file):
     problem = TopicSortProblem(passage_file)
     soln = optimizers.greedy(problem)
-    print(soln)
+    print(soln, end='')
 
 
 if __name__ == '__main__':

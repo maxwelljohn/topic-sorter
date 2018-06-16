@@ -54,7 +54,8 @@ class TopicSortProblem(order_problem.OrderingProblem):
                              ngram_document_frequency[g]))
                 # "Costs" are negative; we want similar passages to be close.
                 # Scaling by 1000 lets us use a matrix of ints.
-                self.costs[index1, index2] = -1000 * similarity_score
+                self.costs[index1, index2] = -1000 * similarity_score / \
+                    min(len(passage1), len(passage2))
 
 
 class TopicSortSolution(order_problem.OrderingSolution):

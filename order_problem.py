@@ -36,6 +36,13 @@ class OrderingSolution:
         self.ensure_validity()
         self.complete = False
 
+    def __hash__(self):
+        # Used for debugging.
+        mult = np.arange(self.dimension * self.dimension, dtype=np.int) ** 2
+        return int(np.sum(
+            self.edges_added * mult.reshape((self.dimension, self.dimension))
+        ))
+
     def ensure_validity(self):
         assert np.sum(self.edges_added * self.valid_edges, axis=(0, 1)) == \
             np.sum(self.edges_added, axis=(0, 1))
@@ -83,7 +90,7 @@ class OrderingSolution:
                 self.connected_component[node_b]
             ]
             self.connected_component[
-                [self.connected_component == swallowed]
+                self.connected_component == swallowed
             ] = swallower
             mask = self.connected_component == swallower
             # For every node in the new, combined component...

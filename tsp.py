@@ -25,7 +25,9 @@ class TSPProblem(order_problem.OrderingProblem):
             assert self.info['EDGE_WEIGHT_TYPE'] == ['EUC_2D']
 
             assert len(self.info['DIMENSION']) == 1
-            super().__init__(int(self.info['DIMENSION'][0]))
+            dim = int(self.info['DIMENSION'][0])
+            super().__init__(dim)
+            self.additions_needed = dim
 
             self.point_set = np.zeros((self.dimension, 2))
             for i in range(1, self.dimension+1):
@@ -120,10 +122,6 @@ class TSPSolution(order_problem.OrderingSolution):
 
         self.ensure_validity()
 
-    def cost(self):
-        self.ensure_validity()
-        return np.sum(self.edges_added * self.problem.costs, axis=(0, 1))
-
     def show(self):
         self.problem.show(self)
 
@@ -147,7 +145,7 @@ def test_greedy(berlin_problem):
     '''
     soln = optimizers.greedy(berlin_problem)
     soln.ensure_completion()
-    assert soln.cost() == 9951
+    assert soln.cost == 9951
 
 
 @pytest.fixture
@@ -168,7 +166,7 @@ def test_cost_calculation(berlin_opt_soln):
 
     7542 comes from http://elib.zib.de/pub/mp-testdata/tsp/tsplib/stsp-sol.html
     '''
-    assert berlin_opt_soln.cost() == 7542
+    assert berlin_opt_soln.cost == 7542
 
 
 if __name__ == '__main__':
@@ -176,9 +174,9 @@ if __name__ == '__main__':
     problem = TSPProblem(sys.argv[1])
     if len(sys.argv) <= 2:
         soln = optimizers.genetic(problem, 20, 20)
-        print(soln.cost())
+        print(soln.cost)
         soln.show()
     else:
         soln = TSPSolution(problem, sys.argv[2])
-        print(soln.cost())
+        print(soln.cost)
         soln.show()

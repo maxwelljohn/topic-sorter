@@ -6,7 +6,7 @@ import tsp
 
 def greedy(problem):
     soln = problem.solution_type(problem)
-    while soln.feasible_edges.any():
+    while not soln.complete:
         target_value = np.min(problem.costs[soln.feasible_edges])
         target_edges = np.array(
             soln.feasible_edges & (problem.costs == target_value),
@@ -31,7 +31,7 @@ def genetic(problem, popsize, n_generations, n_parents=2, tournament_size=2,
                 best = challenger
         return best
     def complete_randomly(soln):
-        while soln.feasible_edges.any():
+        while not soln.complete:
             total = np.sum(soln.feasible_edges)
             chosen_edge = np.random.choice(
                 dim*dim, p=soln.feasible_edges.flatten()/total
@@ -48,7 +48,7 @@ def genetic(problem, popsize, n_generations, n_parents=2, tournament_size=2,
         for parent in parents:
             selection_odds += parent.edges_added
         result = problem.solution_type(problem)
-        while result.feasible_edges.any():
+        while not result.complete:
             this_selection_odds = selection_odds * result.feasible_edges
             total = np.sum(this_selection_odds)
             chosen_edge = np.random.choice(
@@ -62,11 +62,11 @@ def genetic(problem, popsize, n_generations, n_parents=2, tournament_size=2,
     elites = []
     for i in range(n_elites):
         elite = complete_randomly(problem.solution_type(problem))
-        heapq.heappush(elites, (-elite.cost(), elite))
+        heapq.heappush(elites, (-elite.cost, elite))
     pop.extend([elite[1] for elite in elites])
     for p_mutation in mutation_schedule:
         print(p_mutation)
-        scores = [soln.cost() for soln in pop]
+        scores = [soln.cost for soln in pop]
         kids = []
         while len(kids) < popsize:
             parents = [
@@ -75,7 +75,7 @@ def genetic(problem, popsize, n_generations, n_parents=2, tournament_size=2,
             ]
             kid = crossover_with_mutation(parents, p_mutation)
             kids.append(kid)
-            kid_cost = kid.cost()
+            kid_cost = kid.cost
             if kid_cost < -elites[0][0]:
                 print(kid_cost)
                 heapq.heapreplace(elites, (-kid_cost, kid))

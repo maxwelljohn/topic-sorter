@@ -20,6 +20,7 @@ class TopicSortProblem(order_problem.OrderingProblem):
     def __init__(self, passage_file):
         self.passages = passage_file.read().strip().split(PASSAGE_SEPARATOR)
         super().__init__(len(self.passages))
+        self.additions_needed = len(self.passages) - 1
         wnl = nltk.WordNetLemmatizer()
         passage_ngrams = {}
         ngram_document_frequency = nltk.FreqDist()
@@ -76,10 +77,6 @@ class TopicSortSolution(order_problem.OrderingSolution):
             self.ensure_completion()
         else:
             self.ensure_validity()
-
-    def cost(self):
-        self.ensure_validity()
-        return np.sum(self.edges_added * self.problem.costs, axis=(0, 1))
 
     def __str__(self):
         components = self.components()

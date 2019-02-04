@@ -15,6 +15,7 @@ class OrderingSolution:
     def __init__(self, problem):
         self.problem = problem
         self.dimension = self.problem.dimension
+        self.additions_needed = self.problem.additions_needed
         self.edges_added = np.zeros(
             (self.dimension, self.dimension),
             dtype=np.bool
@@ -44,6 +45,7 @@ class OrderingSolution:
         ))
 
     def ensure_validity(self):
+        assert self.additions_needed >= 0
         assert np.sum(self.edges_added * self.valid_edges, axis=(0, 1)) == \
             np.sum(self.edges_added, axis=(0, 1))
 
@@ -52,6 +54,7 @@ class OrderingSolution:
         assert not self.feasible_edges.any()
         cc_name = self.connected_component[0]
         assert all(self.connected_component == cc_name)
+        assert self.additions_needed == 0
         assert self.complete
 
     def add_edge(self, node_a, node_b):
@@ -59,6 +62,7 @@ class OrderingSolution:
 
         assert self.feasible_edges[node_a, node_b]
         assert not self.edges_added[node_a, node_b]
+        assert self.additions_needed >= 1
         self.feasible_edges[node_a, node_b] = False
         self.edges_added[node_a, node_b] = True
 
@@ -70,12 +74,15 @@ class OrderingSolution:
                 self.feasible_edges[node, :] = False
                 self.feasible_edges[:, node] = False
 
+        self.additions_needed -= 1
+
         # This check needs to happen before updating edge feasibility.
         # The TSPSolution class interprets
         # not self.complete and not self.feasible_edges.any()
         # to mean that we need just one final edge for a cycle.
         if not self.feasible_edges.any():
             self.complete = True
+            self.cost = np.sum(self.edges_added * self.problem.costs)
             return
 
         if self.connected_component[node_a] == -1 and \

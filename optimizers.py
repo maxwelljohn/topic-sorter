@@ -1,7 +1,10 @@
 import heapq
 import numpy as np
 import random
+import sys
 import tsp
+
+from bloomfilter import BloomFilter
 
 
 def greedy(problem):
@@ -19,66 +22,126 @@ def greedy(problem):
         )
     return soln
 
-def genetic(problem, popsize, n_generations, n_parents=2, tournament_size=2,
-        n_elites=2):
+
+def genetic(problem, n_commoners, n_elites, n_generations, tournament_size=2,
+            mutation_rate_hist=8, n_parents=2):
     dim = problem.dimension
-    edge_indices = np.arange(dim*dim).reshape((dim, dim))
+    edge_indices = np.arange(dim * dim).reshape((dim, dim))
+
+    edge_costs = problem.solution_type(problem).valid_edges * problem.costs
+    mean_edge_cost = np.mean(edge_costs)
+    edge_cost_sd = np.std(edge_costs)
+    # Softmax action selection on standardized edge costs.
+    baseline_edge_odds = np.e**(-(edge_costs-mean_edge_cost)/edge_cost_sd)
+    baseline_edge_odds /= np.sum(baseline_edge_odds)
+    assert np.isclose(np.sum(baseline_edge_odds), 1)
+
     def tournament_select(values, tournament_size):
         best = random.randrange(len(values))
-        for i in range(1, tournament_size):
+        for _ in range(1, tournament_size):
             challenger = random.randrange(len(values))
             if values[challenger] < values[best]:
                 best = challenger
         return best
-    def complete_randomly(soln):
+
+    def complete_randomly(soln, edge_odds):
         while not soln.complete:
-            total = np.sum(soln.feasible_edges)
-            chosen_edge = np.random.choice(
-                dim*dim, p=soln.feasible_edges.flatten()/total
+            remaining_odds = soln.feasible_edges * edge_odds
+            total = np.sum(remaining_odds)
+            chosen_edges = np.random.choice(
+                dim * dim, size=soln.additions_needed, replace=False,
+                p=remaining_odds.flatten()/total
             )
-            soln.add_edge(chosen_edge // dim, chosen_edge % dim)
+            for edge in chosen_edges:
+                node_a = edge // dim
+                node_b = edge % dim
+                if soln.feasible_edges[node_a, node_b]:
+                    soln.add_edge(node_a, node_b)
         return soln
+
     def crossover_with_mutation(parents, p_mutation):
         # Algebra gets us a background that yields p_mutation% mutations.
-        background = p_mutation*2*dim/(dim*dim - p_mutation*dim*dim)
-        background = max(background, np.finfo(np.float32).eps)
-        selection_odds = np.full(
-            (dim, dim), background, dtype=np.float32
+        background = p_mutation * 2 * dim / (1 - p_mutation)
+        edge_odds = background * baseline_edge_odds
+        eps = np.full(
+            (dim, dim), np.finfo(np.float).eps, dtype=np.float
         )
+        # Edges with 0 odds can't be selected, making problems unsolvable.
+        edge_odds = np.max(np.array([edge_odds, eps]), axis=0)
         for parent in parents:
-            selection_odds += parent.edges_added
+            edge_odds += parent.edges_added
+        assert np.isclose(
+            p_mutation, background / np.sum(edge_odds), atol=0.01
+        )
         result = problem.solution_type(problem)
-        while not result.complete:
-            this_selection_odds = selection_odds * result.feasible_edges
-            total = np.sum(this_selection_odds)
-            chosen_edge = np.random.choice(
-                dim*dim, p=this_selection_odds.reshape((-1,))/total
-            )
-            result.add_edge(chosen_edge // dim, chosen_edge % dim)
-        return result
-    pop = [complete_randomly(problem.solution_type(problem))
-           for i in range(popsize)]
-    mutation_schedule = np.linspace(0.3, 0, n_generations)
-    elites = []
-    for i in range(n_elites):
-        elite = complete_randomly(problem.solution_type(problem))
-        heapq.heappush(elites, (-elite.cost, elite))
-    pop.extend([elite[1] for elite in elites])
-    for p_mutation in mutation_schedule:
-        print(p_mutation)
+        return complete_randomly(result, edge_odds)
+
+    def tune_mutation_rate(mutation_rate_data):
+        X = mutation_rate_data[:, :2]
+        y = mutation_rate_data[:, 2]
+        # Linear regression
+        theta = np.linalg.inv(X.T @ X) @ X.T @ y
+        return max(min((0.8 - theta[0]) / theta[1], 0.99), 0.01)
+
+    seen = BloomFilter((n_commoners + n_elites) * n_generations)
+
+    pop = [complete_randomly(problem.solution_type(problem),
+                             baseline_edge_odds)
+           for _ in range(n_commoners)]
+
+    elites = [greedy(problem)]
+    for _ in range(n_elites - 1):
+        elite = complete_randomly(problem.solution_type(problem),
+                                  baseline_edge_odds)
+        heapq.heappush(elites, elite)
+    pop.extend(elites)
+
+    # Permanent data points at (1, 1) and (0, 0) serve as prior knowledge
+    # and ensure matrix inversion is always possible during regression.
+    mutation_rate_data = np.ones((mutation_rate_hist + 2, 3))
+    mutation_rate_data[1, 1:] = 0
+    p_mutation = 0.3
+
+    for g in range(n_generations):
+        sys.stdout.write('.')
+        sys.stdout.flush()
+
         scores = [soln.cost for soln in pop]
+
+        n_attempted_kids = 0
+        n_failed_kids = 0
         kids = []
-        while len(kids) < popsize:
+
+        while len(kids) < n_commoners:
             parents = [
                 pop[tournament_select(scores, tournament_size)]
-                for i in range(n_parents)
+                for _ in range(n_parents)
             ]
             kid = crossover_with_mutation(parents, p_mutation)
-            kids.append(kid)
-            kid_cost = kid.cost
-            if kid_cost < -elites[0][0]:
-                print(kid_cost)
-                heapq.heapreplace(elites, (-kid_cost, kid))
+
+            if kid.cost <= elites[0].cost:
+                # The bloom filter is approximate.
+                # Do exact dup prevention for elites.
+                dup = [(elite.edges_added == kid.edges_added).all()
+                       for elite in elites]
+                if not any(dup):
+                    heapq.heapreplace(elites, kid)
+            elif repr(hash(kid)) not in seen:
+                kids.append(kid)
+                if kid.cost > sum([p.cost for p in parents]) / len(parents):
+                    n_failed_kids += 1
+
+            seen.add(repr(hash(kid)))
+            n_attempted_kids += 1
+
+        mutation_rate_data[2 + g % mutation_rate_hist] = \
+            [1, p_mutation, n_failed_kids / n_attempted_kids]
+        p_mutation = tune_mutation_rate(mutation_rate_data)
+
         pop = kids
-        pop.extend([elite[1] for elite in elites])
-    return max(elites)[1]
+        pop.extend(elites)
+
+    sys.stdout.write('\n')
+    sys.stdout.flush()
+
+    return max(elites)  # Comparison operator overload makes cheap solns "big".

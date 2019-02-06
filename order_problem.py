@@ -1,6 +1,7 @@
 import numpy as np
 
 from copy import copy
+from functools import total_ordering
 
 
 class OrderingProblem:
@@ -10,7 +11,15 @@ class OrderingProblem:
             (self.dimension, self.dimension), dtype=np.int
         )
 
+        max_int = np.iinfo(np.uint).max
+        max_mult = max_int / self.dimension  # Prevent overflows during hashing
+        self.hash_mult = max_mult * np.random.rand(
+            self.dimension, self.dimension
+        )
+        self.hash_mult = np.array(self.hash_mult, dtype=np.uint)
 
+
+@total_ordering
 class OrderingSolution:
     def __init__(self, problem):
         self.problem = problem
@@ -38,11 +47,16 @@ class OrderingSolution:
         self.complete = False
 
     def __hash__(self):
-        # Used for debugging.
-        mult = np.arange(self.dimension * self.dimension, dtype=np.int) ** 2
         return int(np.sum(
-            self.edges_added * mult.reshape((self.dimension, self.dimension))
+            self.edges_added * self.problem.hash_mult
         ))
+
+    def __lt__(self, other):
+        # This sort order lets heapq track the longest "elite" solution.
+        return self.cost > other.cost
+
+    def __eq__(self, other):
+        return self.cost == other.cost
 
     def ensure_validity(self):
         assert self.additions_needed >= 0

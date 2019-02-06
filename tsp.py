@@ -173,7 +173,7 @@ if __name__ == '__main__':
     import sys
     problem = TSPProblem(sys.argv[1])
     if len(sys.argv) <= 2:
-        soln = optimizers.genetic(problem, 20, 20)
+        soln = optimizers.genetic(problem, 20, 20, 1000)
         print(soln.cost)
         soln.show()
     else:

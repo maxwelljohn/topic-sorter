@@ -83,7 +83,8 @@ def genetic(problem, n_commoners, n_elites, n_generations, tournament_size=2,
         theta = np.linalg.inv(X.T @ X) @ X.T @ y
         return max(min((0.8 - theta[0]) / theta[1], 0.99), 0.01)
 
-    seen = BloomFilter((n_commoners + n_elites) * n_generations)
+    seen = BloomFilter(n_generations * (n_commoners + n_elites))
+    stuck_threshold = 10 * (n_commoners + n_elites)
 
     pop = [complete_randomly(problem.solution_type(problem),
                              baseline_edge_odds)
@@ -133,6 +134,11 @@ def genetic(problem, n_commoners, n_elites, n_generations, tournament_size=2,
 
             seen.add(repr(hash(kid)))
             n_attempted_kids += 1
+            if n_attempted_kids > stuck_threshold:
+                sys.stdout.write('\n')
+                sys.stdout.flush()
+                print("Optimization seems stuck. Returning best so far...")
+                return max(elites)
 
         mutation_rate_data[2 + g % mutation_rate_hist] = \
             [1, p_mutation, n_failed_kids / n_attempted_kids]

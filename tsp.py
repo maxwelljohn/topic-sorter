@@ -148,6 +148,15 @@ def test_greedy(berlin_problem):
     assert soln.cost == 9951
 
 
+def test_genetic(berlin_problem):
+    '''
+    Verify the genetic solver runs without errors on the Berlin problem.
+    '''
+    soln = optimizers.genetic(berlin_problem, 5, 5, 10)
+    soln.ensure_completion()
+    assert soln.cost <= 9951
+
+
 @pytest.fixture
 def berlin_opt_soln(berlin_problem):
     '''

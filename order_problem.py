@@ -71,6 +71,11 @@ class OrderingSolution:
         assert self.additions_needed == 0
         assert self.complete
 
+    def finish(self):
+        self.complete = True
+        self.cost = np.sum(self.edges_added * self.problem.costs)
+        self.ensure_completion()
+
     def add_edge(self, node_a, node_b):
         node_a, node_b = sorted([node_a, node_b])
 
@@ -95,8 +100,7 @@ class OrderingSolution:
         # not self.complete and not self.feasible_edges.any()
         # to mean that we need just one final edge for a cycle.
         if not self.feasible_edges.any():
-            self.complete = True
-            self.cost = np.sum(self.edges_added * self.problem.costs)
+            self.finish()
             return
 
         if self.connected_component[node_a] == -1 and \

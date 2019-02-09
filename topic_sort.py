@@ -73,8 +73,7 @@ class TopicSortSolution(order_problem.OrderingSolution):
         super().add_edge(node_a, node_b)
 
         if not self.feasible_edges.any():
-            self.complete = True
-            self.ensure_completion()
+            self.finish()
         else:
             self.ensure_validity()
 
@@ -102,6 +101,22 @@ def test_greedy(sample_problem):
     Verify the greedy solver produces the correct result on the sample text.
     '''
     soln = optimizers.greedy(sample_problem)
+    soln.ensure_completion()
+    assert str(soln) == """apples bananas
+
+bananas oranges
+
+oranges pears plums
+
+pears plums
+"""
+
+
+def test_genetic(sample_problem):
+    '''
+    Verify the genetic solver produces the correct result on the sample text.
+    '''
+    soln = optimizers.genetic(sample_problem, 20, 20, 1000)
     soln.ensure_completion()
     assert str(soln) == """apples bananas
 

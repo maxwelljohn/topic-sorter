@@ -63,16 +63,20 @@ def genetic(problem, n_commoners, n_elites, n_generations, tournament_size=2,
         # Algebra gets us a background that yields p_mutation% mutations.
         background = p_mutation * 2 * dim / (1 - p_mutation)
         edge_odds = background * baseline_edge_odds
+
+        # Edges with 0 odds can't be selected, making problems unsolvable.
+        # Fix this by ensuring each edge has odds of at least epsilon.
         eps = np.full(
             (dim, dim), np.finfo(np.float).eps, dtype=np.float
         )
-        # Edges with 0 odds can't be selected, making problems unsolvable.
         edge_odds = np.max(np.array([edge_odds, eps]), axis=0)
+
         for parent in parents:
             edge_odds += parent.edges_added
         assert np.isclose(
-            p_mutation, background / np.sum(edge_odds), atol=0.01
+            p_mutation, background / np.sum(edge_odds), atol=0.1
         )
+
         result = problem.solution_type(problem)
         return complete_randomly(result, edge_odds)
 
@@ -104,8 +108,8 @@ def genetic(problem, n_commoners, n_elites, n_generations, tournament_size=2,
     p_mutation = 0.3
 
     for g in range(n_generations):
-        sys.stdout.write('.')
-        sys.stdout.flush()
+        sys.stderr.write('.')
+        sys.stderr.flush()
 
         scores = [soln.cost for soln in pop]
 
@@ -135,9 +139,11 @@ def genetic(problem, n_commoners, n_elites, n_generations, tournament_size=2,
             seen.add(repr(hash(kid)))
             n_attempted_kids += 1
             if n_attempted_kids > stuck_threshold:
-                sys.stdout.write('\n')
-                sys.stdout.flush()
-                print("Optimization seems stuck. Returning best so far...")
+                sys.stderr.write('\n')
+                sys.stderr.write(
+                    'Optimization seems stuck. Returning best so far...\n'
+                )
+                sys.stderr.flush()
                 return max(elites)
 
         mutation_rate_data[2 + g % mutation_rate_hist] = \
@@ -147,7 +153,7 @@ def genetic(problem, n_commoners, n_elites, n_generations, tournament_size=2,
         pop = kids
         pop.extend(elites)
 
-    sys.stdout.write('\n')
-    sys.stdout.flush()
+    sys.stderr.write('\n')
+    sys.stderr.flush()
 
     return max(elites)  # Comparison operator overload makes cheap solns "big".

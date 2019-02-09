@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import argparse
 import nltk
 import numpy as np
 import pytest
@@ -128,18 +129,32 @@ pears plums
 """
 
 
-def main(passage_file):
+def main(passage_file, slow=False):
     problem = TopicSortProblem(passage_file)
-    soln = optimizers.greedy(problem)
-    print(soln, end='')
+    if slow:
+        soln = optimizers.genetic(problem, 20, 20, 1000)
+    else:
+        soln = optimizers.greedy(problem)
+    print(soln)
 
 
 if __name__ == '__main__':
     import sys
-    if sys.argv[1] == '-':
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "filepath",
+        help="path to the file of text passages to sort by topic; - for stdin"
+    )
+    parser.add_argument(
+        '-s', "--slow",
+        action='store_true',
+        help="sort the file slowly & carefully (quick & dirty is the default)",
+    )
+    args = parser.parse_args()
+    if args.filepath == '-':
         passage_file = sys.stdin
-        main(passage_file)
+        main(passage_file, args.slow)
     else:
-        passage_filepath = sys.argv[1]
+        passage_filepath = args.filepath
         with open(passage_filepath, 'r') as passage_file:
-            main(passage_file)
+            main(passage_file, args.slow)

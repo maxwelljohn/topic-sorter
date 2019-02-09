@@ -6,6 +6,8 @@ from functools import total_ordering
 
 class OrderingProblem:
     def __init__(self, dimension):
+        if dimension <= 1:
+            raise ValueError("Nothing to sort")
         self.dimension = dimension
         self.costs = -1 * np.ones(
             (self.dimension, self.dimension), dtype=np.int

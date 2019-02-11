@@ -9,11 +9,15 @@ import re
 import optimizers
 import order_problem
 
+nltk.download('stopwords', quiet=True)
+nltk.download('punkt', quiet=True)
+nltk.download('wordnet', quiet=True)
+
 PASSAGE_SEPARATOR = "\n\n"
 STOPWORDS = set(nltk.corpus.stopwords.words('english'))
 STOPWORDS.add('http')
 STOPWORDS.add('https')
-WORD_RE = re.compile('^\w+$')
+WORD_RE = re.compile(r'^\w+$')
 MAX_NGRAM_N = 3
 
 

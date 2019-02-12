@@ -1,0 +1,7 @@
+matplotlib==3.0.2
+nltk==3.4
+numpy==1.16.1
+numpydoc==0.7.0
+pycodestyle==2.5.0
+pytest==4.2.0
+simplebloomfilter==1.0.0
